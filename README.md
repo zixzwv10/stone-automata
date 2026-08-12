@@ -38,9 +38,6 @@ Rules are written in a Python-like syntax:
 **Directions:** `up`, `down`, `left`, `right`
 
 **Examples:**
-# Single line
-
-if stones == 1: send 1 up
 
 # Multi-line with conditions
 
@@ -51,6 +48,8 @@ elif stones > 2 and stones < 6:
 send stones right  
 else:  
 wait
+
+# Note: single-line rules have been partially implemented but are very buggy. Help wanted.
 
 **Operators:** `==`, `!=`, `<`, `>`, `<=`, `>=`, `%` (modulo), `and`, `or`, `not`
 

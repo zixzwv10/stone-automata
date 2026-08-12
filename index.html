@@ -713,23 +713,27 @@ CELLS:
                     const inlineAction = conditionMatch[2] ? conditionMatch[2].trim() : '';
                     const conditionResult = evaluateExpression(condition, stonesCount);
                     
+                    // Find else/elif
                     let elseIdx = -1;
                     let j = i + 1;
                     while (j < lines.length) {
                         const trimmed = lines[j].trim();
-                        if (trimmed === 'else:' || trimmed.startsWith('elif ')) { elseIdx = j; break; }
+                        if (trimmed === 'else:' || trimmed.startsWith('else:') || trimmed.startsWith('elif ')) { 
+                            elseIdx = j; 
+                            break; 
+                        }
                         j++;
                     }
                     
                     if (conditionResult) {
-                        // Process inline action if present
+                        // Process if's inline action if present
                         if (inlineAction && inlineAction.startsWith('send ')) {
                             actions.push(...parseSendSafely(inlineAction, stonesCount, validDirs));
                             return actions;
                         } else if (inlineAction === 'wait') {
                             return actions;
                         }
-                        // Process multi-line block
+                        // Process if's multi-line block
                         if (!inlineAction) {
                             let blockEnd = elseIdx !== -1 ? elseIdx : lines.length;
                             for (let k = i + 1; k < blockEnd; k++) {
@@ -741,10 +745,28 @@ CELLS:
                             return actions;
                         }
                     } else {
+                        // Condition is false, check for else/elif
                         if (elseIdx !== -1) {
                             const elseLine = lines[elseIdx].trim();
-                            if (elseLine === 'else:') {
-                                // Process else block
+                            
+                            // Check for elif
+                            if (elseLine.startsWith('elif ')) {
+                                return executeRuleLines(lines.slice(elseIdx), 0, stonesCount, validDirs);
+                            }
+                            
+                            // Check for else with inline action
+                            const elseMatch = elseLine.match(/^else:\s*(.*)$/);
+                            const elseInlineAction = elseMatch && elseMatch[1] ? elseMatch[1].trim() : '';
+                            
+                            if (elseInlineAction && elseInlineAction.startsWith('send ')) {
+                                actions.push(...parseSendSafely(elseInlineAction, stonesCount, validDirs));
+                                return actions;
+                            } else if (elseInlineAction === 'wait') {
+                                return actions;
+                            }
+                            
+                            // Process else's multi-line block
+                            if (!elseInlineAction) {
                                 for (let k = elseIdx + 1; k < lines.length; k++) {
                                     const subLine = lines[k].trim();
                                     if (subLine.startsWith('send ')) {
@@ -752,8 +774,6 @@ CELLS:
                                     }
                                 }
                                 return actions;
-                            } else if (elseLine.startsWith('elif ')) {
-                                return executeRuleLines(lines.slice(elseIdx), 0, stonesCount, validDirs);
                             }
                         }
                         return actions;

@@ -1,8 +1,8 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Rule-based cellular automata</title>
     <style>
         * {
@@ -299,21 +299,21 @@
 <div class="game-container">
     <div class="left-panel">
         <div class="title-bar">
-            <input type="text" id="boardTitle" placeholder="Board title..." value="My Automata">
+            <input type="text" id="boardTitle" placeholder="Board title..." value="My Automata" />
             <button id="exportBtn">📤 Export</button>
             <button id="importBtn">📥 Import</button>
         </div>
         <div class="toolbar">
             <div class="size-control">
                 <label>Rows</label>
-                <input type="number" id="rowsInput" min="2" max="100" value="6">
+                <input type="number" id="rowsInput" min="2" max="100" value="6" />
                 <label>Cols</label>
-                <input type="number" id="colsInput" min="2" max="100" value="8">
+                <input type="number" id="colsInput" min="2" max="100" value="8" />
                 <button id="resizeBoardBtn">🔄 Resize</button>
             </div>
             <div class="speed-slider">
                 <span>🐢</span>
-                <input type="range" id="speedSlider" min="0.5" max="10" step="0.5" value="2">
+                <input type="range" id="speedSlider" min="0.5" max="10" step="0.5" value="2" />
                 <span>🐇</span>
                 <span id="speedValue">2x</span>
             </div>
@@ -358,9 +358,13 @@
     <h4>How to play</h4>
     <p>Select cells. Set stones with number keys or arrows. Write rules in the editor. Press . to apply. Press Play.</p>
     <h4>Rules</h4>
-    <p><code>send 1 right</code> or <code>wait</code>. Use if/elif/else with <code>and</code>, <code>or</code>, <code>not</code>.</p>
+    <p><code>send 1 right</code> or <code>wait</code>. Use if/elif/else with <code>and</code>, <code>or</code>, <code>not</code>. Arithmetic supports <code>+</code>, <code>-</code>, <code>*</code>, <code>/</code>, <code>%</code>, and parentheses. Division is integer (floor) division.</p>
+    <p>You can put multiple actions in one branch by separating them with semicolons:</p>
+    <p><code>if stones > 2: send 1 right; send 1 down</code></p>
+    <p>Top‑level multiple sends are also allowed (separate with semicolons or newlines).</p>
     <p><code>if stones == 1: send 1 up</code></p>
-    <p><code>if 2 &lt; stones &lt; 5: send stones down</code></p>
+    <p><code>if stones &gt; 2 and stones &lt; 5: send stones down</code></p>
+    <p><code>send (stones + 1) / 2 right</code></p>
     <h4>Import / Export</h4>
     <p>Export copies board as text. Import reads text and restores board.</p>
     <p>Example "Adder" board:</p>
@@ -628,186 +632,435 @@ CELLS:
             showPopup('Pasted from internal clipboard');
         }
 
-        // ----- Enhanced expression evaluator -----
-        function evaluateExpression(expr, stonesCount) {
-            expr = expr.trim();
-            if (expr.startsWith('not ')) return !evaluateExpression(expr.substring(4), stonesCount);
-            const andMatch = expr.match(/^(.*?)\s+and\s+(.*)$/);
-            if (andMatch) return evaluateExpression(andMatch[1], stonesCount) && evaluateExpression(andMatch[2], stonesCount);
-            const orMatch = expr.match(/^(.*?)\s+or\s+(.*)$/);
-            if (orMatch) return evaluateExpression(orMatch[1], stonesCount) || evaluateExpression(orMatch[2], stonesCount);
-            
-            expr = expr.replace(/stones/g, stonesCount);
-            const comparisonMatch = expr.match(/^(.+?)\s*(<=|>=|<|>|==|!=)\s*(.+?)\s*(<=|>=|<|>|==|!=)\s*(.+)$/);
-            if (comparisonMatch) {
-                const left = evalMath(comparisonMatch[1]);
-                const op1 = comparisonMatch[2];
-                const middle = evalMath(comparisonMatch[3]);
-                const op2 = comparisonMatch[4];
-                const right = evalMath(comparisonMatch[5]);
-                return compareValues(left, op1, middle) && compareValues(middle, op2, right);
+        // ----- Rule language parser (updated for semicolon-separated actions) -----
+        // Design: actions inside if/elif/else can be multiple, separated by ';'.
+        // Top-level statements can also be separated by ';' or newlines.
+
+        function tokenizeRule(text) {
+            const tokens = [];
+            let i = 0;
+
+            while (i < text.length) {
+                const ch = text[i];
+
+                if (/\s/.test(ch)) {
+                    i++;
+                    continue;
+                }
+
+                if (ch === '#') {
+                    while (i < text.length && text[i] !== '\n') i++;
+                    continue;
+                }
+
+                if (/[0-9]/.test(ch)) {
+                    let j = i;
+                    while (j < text.length && /[0-9]/.test(text[j])) j++;
+                    tokens.push({ type: 'number', value: Number(text.slice(i, j)) });
+                    i = j;
+                    continue;
+                }
+
+                if (/[A-Za-z_]/.test(ch)) {
+                    let j = i;
+                    while (j < text.length && /[A-Za-z0-9_]/.test(text[j])) j++;
+                    tokens.push({ type: 'word', value: text.slice(i, j).toLowerCase() });
+                    i = j;
+                    continue;
+                }
+
+                const two = text.slice(i, i + 2);
+                if (['==', '!=', '<=', '>='].includes(two)) {
+                    tokens.push({ type: 'operator', value: two });
+                    i += 2;
+                    continue;
+                }
+
+                if ('+-*/%()<>:;'.includes(ch)) {
+                    tokens.push({
+                        type: ch === ':' ? 'colon' : ch === ';' ? 'semicolon' : 'operator',
+                        value: ch
+                    });
+                    i++;
+                    continue;
+                }
+
+                throw new Error(`Unexpected character "${ch}"`);
             }
-            const singleMatch = expr.match(/^(.+?)\s*(<=|>=|<|>|==|!=)\s*(.+)$/);
-            if (singleMatch) {
-                return compareValues(evalMath(singleMatch[1]), singleMatch[2], evalMath(singleMatch[3]));
-            }
-            const moduloMatch = expr.match(/^(\d+)\s*%\s*(\d+)\s*(==|!=)\s*(\d+)$/);
-            if (moduloMatch) {
-                const result = parseInt(moduloMatch[1]) % parseInt(moduloMatch[2]);
-                return moduloMatch[3] === '==' ? result === parseInt(moduloMatch[4]) : result !== parseInt(moduloMatch[4]);
-            }
-            return false;
+
+            tokens.push({ type: 'eof', value: null });
+            return tokens;
         }
-        
-        function evalMath(str) {
-            str = str.trim();
-            if (str.includes('/')) {
-                const [num, den] = str.split('/').map(s => parseFloat(s.trim()));
-                return Math.floor(num / den);
+
+        class RuleParser {
+            constructor(text) {
+                this.tokens = tokenizeRule(text);
+                this.pos = 0;
             }
-            if (str.includes('*')) {
-                const [num1, num2] = str.split('*').map(s => parseFloat(s.trim()));
-                return num1 * num2;
+
+            current() {
+                return this.tokens[this.pos];
             }
-            if (str.includes('+')) {
-                const [num1, num2] = str.split('+').map(s => parseFloat(s.trim()));
-                return num1 + num2;
+
+            peek(offset = 1) {
+                return this.tokens[Math.min(this.pos + offset, this.tokens.length - 1)];
             }
-            if (str.includes('-')) {
-                const [num1, num2] = str.split('-').map(s => parseFloat(s.trim()));
-                return num1 - num2;
+
+            advance() {
+                return this.tokens[this.pos++];
             }
-            return parseFloat(str) || 0;
+
+            match(value) {
+                if (this.current().value === value) {
+                    this.advance();
+                    return true;
+                }
+                return false;
+            }
+
+            expect(value) {
+                if (!this.match(value)) {
+                    throw new Error(`Expected "${value}"`);
+                }
+            }
+
+            expectWord(word) {
+                if (this.current().type !== 'word' || this.current().value !== word) {
+                    throw new Error(`Expected "${word}"`);
+                }
+                this.advance();
+            }
+
+            parse() {
+                const statements = [];
+                while (this.current().type !== 'eof') {
+                    statements.push(this.parseStatement());
+                    // Allow semicolon between statements (optional)
+                    if (this.current().type === 'semicolon') this.advance();
+                }
+                return statements;
+            }
+
+            parseStatement() {
+                if (this.current().type === 'word') {
+                    const word = this.current().value;
+                    if (word === 'if') return this.parseIf();
+                    if (word === 'elif' || word === 'else') {
+                        throw new Error(`Unexpected "${word}"`);
+                    }
+                    if (word === 'send') return this.parseSend();
+                    if (word === 'wait') {
+                        this.advance();
+                        return { type: 'wait' };
+                    }
+                }
+                throw new Error(`Expected if, send, or wait`);
+            }
+
+            parseIf() {
+                const branches = [];
+                this.expectWord('if');
+                const condition = this.parseCondition();
+                this.expect(':');
+                const actions = this.parseActionList();
+                branches.push({ condition, actions });
+
+                while (this.current().type === 'word' && this.current().value === 'elif') {
+                    this.advance();
+                    const elifCondition = this.parseCondition();
+                    this.expect(':');
+                    const elifActions = this.parseActionList();
+                    branches.push({ condition: elifCondition, actions: elifActions });
+                }
+
+                let elseActions = null;
+                if (this.current().type === 'word' && this.current().value === 'else') {
+                    this.advance();
+                    this.expect(':');
+                    elseActions = this.parseActionList();
+                }
+
+                return {
+                    type: 'if',
+                    branches,
+                    elseActions
+                };
+            }
+
+            // Parse a list of actions separated by semicolons.
+            parseActionList() {
+                const actions = [];
+                do {
+                    if (this.current().type === 'word' && this.current().value === 'send') {
+                        actions.push(this.parseSend());
+                    } else if (this.current().type === 'word' && this.current().value === 'wait') {
+                        this.advance();
+                        actions.push({ type: 'wait' });
+                    } else {
+                        throw new Error(`Expected send or wait after ":"`);
+                    }
+                } while (this.current().type === 'semicolon' && this.advance()); // consume semicolon
+                return actions;
+            }
+
+            parseSend() {
+                this.expectWord('send');
+                const amount = this.parseExpression();
+                if (this.current().type !== 'word') {
+                    throw new Error(`Expected direction after send amount`);
+                }
+                const direction = this.advance().value;
+                if (!['up', 'down', 'left', 'right'].includes(direction)) {
+                    throw new Error(`Unknown direction "${direction}"`);
+                }
+                return {
+                    type: 'send',
+                    amount,
+                    direction
+                };
+            }
+
+            parseCondition() {
+                return this.parseOr();
+            }
+
+            parseOr() {
+                let left = this.parseAnd();
+                while (this.current().type === 'word' && this.current().value === 'or') {
+                    this.advance();
+                    left = {
+                        type: 'or',
+                        left,
+                        right: this.parseAnd()
+                    };
+                }
+                return left;
+            }
+
+            parseAnd() {
+                let left = this.parseNot();
+                while (this.current().type === 'word' && this.current().value === 'and') {
+                    this.advance();
+                    left = {
+                        type: 'and',
+                        left,
+                        right: this.parseNot()
+                    };
+                }
+                return left;
+            }
+
+            parseNot() {
+                if (this.current().type === 'word' && this.current().value === 'not') {
+                    this.advance();
+                    return {
+                        type: 'not',
+                        value: this.parseNot()
+                    };
+                }
+                return this.parseComparison();
+            }
+
+            parseComparison() {
+                let left = this.parseExpression();
+                if (this.current().type === 'operator' &&
+                    ['==', '!=', '<', '<=', '>', '>='].includes(this.current().value)) {
+                    const op = this.advance().value;
+                    const right = this.parseExpression();
+                    return {
+                        type: 'comparison',
+                        op,
+                        left,
+                        right
+                    };
+                }
+                // Bare expression is truthy/nonzero.
+                return {
+                    type: 'truthy',
+                    value: left
+                };
+            }
+
+            parseExpression() {
+                let left = this.parseTerm();
+                while (this.current().value === '+' || this.current().value === '-') {
+                    const op = this.advance().value;
+                    left = {
+                        type: 'binary',
+                        op,
+                        left,
+                        right: this.parseTerm()
+                    };
+                }
+                return left;
+            }
+
+            parseTerm() {
+                let left = this.parseUnary();
+                while (this.current().value === '*' ||
+                       this.current().value === '/' ||
+                       this.current().value === '%') {
+                    const op = this.advance().value;
+                    left = {
+                        type: 'binary',
+                        op,
+                        left,
+                        right: this.parseUnary()
+                    };
+                }
+                return left;
+            }
+
+            parseUnary() {
+                if (this.match('-')) {
+                    return {
+                        type: 'unary',
+                        op: '-',
+                        value: this.parseUnary()
+                    };
+                }
+                return this.parsePrimary();
+            }
+
+            parsePrimary() {
+                const token = this.current();
+                if (token.type === 'number') {
+                    this.advance();
+                    return { type: 'number', value: token.value };
+                }
+                if (token.type === 'word' && token.value === 'stones') {
+                    this.advance();
+                    return { type: 'stones' };
+                }
+                if (this.match('(')) {
+                    const expression = this.parseExpression();
+                    this.expect(')');
+                    return expression;
+                }
+                throw new Error(`Expected number, stones, or "("`);
+            }
         }
-        
-        function compareValues(left, op, right) {
-            switch(op) {
-                case '<': return left < right;
-                case '<=': return left <= right;
-                case '>': return left > right;
-                case '>=': return left >= right;
-                case '==': return left === right;
-                case '!=': return left !== right;
+
+        function evaluateAst(node, stonesCount) {
+            switch (node.type) {
+                case 'number': return node.value;
+                case 'stones': return stonesCount;
+                case 'unary': return -evaluateAst(node.value, stonesCount);
+                case 'binary': {
+                    const left = evaluateAst(node.left, stonesCount);
+                    const right = evaluateAst(node.right, stonesCount);
+                    switch (node.op) {
+                        case '+': return left + right;
+                        case '-': return left - right;
+                        case '*': return left * right;
+                        case '/': 
+                            if (right === 0) throw new Error('Division by zero');
+                            return Math.floor(left / right);
+                        case '%':
+                            if (right === 0) throw new Error('Modulo by zero');
+                            return left % right;
+                        default: throw new Error(`Unknown operator "${node.op}"`);
+                    }
+                }
+                default: throw new Error(`Invalid expression`);
+            }
+        }
+
+        function evaluateConditionAst(node, stonesCount) {
+            switch (node.type) {
+                case 'and': return evaluateConditionAst(node.left, stonesCount) && evaluateConditionAst(node.right, stonesCount);
+                case 'or': return evaluateConditionAst(node.left, stonesCount) || evaluateConditionAst(node.right, stonesCount);
+                case 'not': return !evaluateConditionAst(node.value, stonesCount);
+                case 'comparison': {
+                    const left = evaluateAst(node.left, stonesCount);
+                    const right = evaluateAst(node.right, stonesCount);
+                    switch (node.op) {
+                        case '==': return left === right;
+                        case '!=': return left !== right;
+                        case '<': return left < right;
+                        case '<=': return left <= right;
+                        case '>': return left > right;
+                        case '>=': return left >= right;
+                        default: return false;
+                    }
+                }
+                case 'truthy': return evaluateAst(node.value, stonesCount) !== 0;
                 default: return false;
             }
         }
 
-        // ----- Rule compiler (fixed for single-line) -----
-        function compileRuleCode(codeStr) {
-            if (!codeStr || codeStr.trim() === '') return null;
-            return function(stonesCount, validDirs) {
-                const lines = codeStr.split('\n').map(l => l.trim()).filter(l => l.length > 0);
-                return executeRuleLines(lines, 0, stonesCount, validDirs);
-            };
-        }
-
-        function executeRuleLines(lines, startIdx, stonesCount, validDirs) {
-            let i = startIdx;
+        // Evaluate a list of statements (AST) and return an array of {dir, amount}.
+        function evaluateRuleAst(statements, stonesCount, validDirs) {
             const actions = [];
-            while (i < lines.length) {
-                const line = lines[i];
-                if (line.startsWith('if ') || line.startsWith('elif ')) {
-                    const conditionMatch = line.match(/^(?:if|elif)\s+(.+?)\s*:\s*(.*)$/);
-                    if (!conditionMatch) { i++; continue; }
-                    const condition = conditionMatch[1].trim();
-                    const inlineAction = conditionMatch[2] ? conditionMatch[2].trim() : '';
-                    const conditionResult = evaluateExpression(condition, stonesCount);
-                    
-                    // Find else/elif
-                    let elseIdx = -1;
-                    let j = i + 1;
-                    while (j < lines.length) {
-                        const trimmed = lines[j].trim();
-                        if (trimmed === 'else:' || trimmed.startsWith('else:') || trimmed.startsWith('elif ')) { 
-                            elseIdx = j; 
-                            break; 
-                        }
-                        j++;
+
+            function addAction(action) {
+                if (!action || action.type === 'wait') return;
+                if (action.type === 'send') {
+                    const amount = Math.floor(evaluateAst(action.amount, stonesCount));
+                    if (amount > 0 && validDirs[action.direction]) {
+                        actions.push({ dir: action.direction, amount });
                     }
-                    
-                    if (conditionResult) {
-                        // Process if's inline action if present
-                        if (inlineAction && inlineAction.startsWith('send ')) {
-                            actions.push(...parseSendSafely(inlineAction, stonesCount, validDirs));
-                            return actions;
-                        } else if (inlineAction === 'wait') {
-                            return actions;
-                        }
-                        // Process if's multi-line block
-                        if (!inlineAction) {
-                            let blockEnd = elseIdx !== -1 ? elseIdx : lines.length;
-                            for (let k = i + 1; k < blockEnd; k++) {
-                                const subLine = lines[k].trim();
-                                if (subLine.startsWith('send ')) {
-                                    actions.push(...parseSendSafely(subLine, stonesCount, validDirs));
-                                }
-                            }
-                            return actions;
-                        }
-                    } else {
-                        // Condition is false, check for else/elif
-                        if (elseIdx !== -1) {
-                            const elseLine = lines[elseIdx].trim();
-                            
-                            // Check for elif
-                            if (elseLine.startsWith('elif ')) {
-                                return executeRuleLines(lines.slice(elseIdx), 0, stonesCount, validDirs);
-                            }
-                            
-                            // Check for else with inline action
-                            const elseMatch = elseLine.match(/^else:\s*(.*)$/);
-                            const elseInlineAction = elseMatch && elseMatch[1] ? elseMatch[1].trim() : '';
-                            
-                            if (elseInlineAction && elseInlineAction.startsWith('send ')) {
-                                actions.push(...parseSendSafely(elseInlineAction, stonesCount, validDirs));
-                                return actions;
-                            } else if (elseInlineAction === 'wait') {
-                                return actions;
-                            }
-                            
-                            // Process else's multi-line block
-                            if (!elseInlineAction) {
-                                for (let k = elseIdx + 1; k < lines.length; k++) {
-                                    const subLine = lines[k].trim();
-                                    if (subLine.startsWith('send ')) {
-                                        actions.push(...parseSendSafely(subLine, stonesCount, validDirs));
-                                    }
-                                }
-                                return actions;
-                            }
-                        }
-                        return actions;
-                    }
-                } else if (line.startsWith('send ')) {
-                    actions.push(...parseSendSafely(line, stonesCount, validDirs));
                 }
-                i++;
+            }
+
+            function addActionList(actionList) {
+                if (!actionList) return;
+                for (const act of actionList) {
+                    addAction(act);
+                }
+            }
+
+            for (const statement of statements) {
+                if (statement.type === 'send') {
+                    addAction(statement);
+                    continue;
+                }
+                if (statement.type === 'wait') {
+                    // do nothing
+                    continue;
+                }
+                if (statement.type === 'if') {
+                    let branchTaken = false;
+                    for (const branch of statement.branches) {
+                        if (evaluateConditionAst(branch.condition, stonesCount)) {
+                            addActionList(branch.actions);
+                            branchTaken = true;
+                            break;
+                        }
+                    }
+                    if (!branchTaken && statement.elseActions) {
+                        addActionList(statement.elseActions);
+                    }
+                    // Continue to next statement – do NOT return early.
+                }
             }
             return actions;
         }
 
-        function parseSendSafely(sendLine, stonesCount, validDirs) {
-            const match = sendLine.match(/^send\s+(.+)$/);
-            if (!match) return [];
-            let amountExpr = match[1].trim();
-            let amount = 0;
-            let dir = '';
-            const parts = amountExpr.split(/\s+/);
-            if (parts.length >= 2) {
-                dir = parts[parts.length-1].toLowerCase();
-                amountExpr = parts.slice(0, -1).join(' ');
-            }
+        function compileRuleCode(codeStr) {
+            if (!codeStr || codeStr.trim() === '') return null;
             try {
-                amountExpr = amountExpr.replace(/stones/g, stonesCount);
-                if (amountExpr.includes('/')) {
-                    const [num, den] = amountExpr.split('/').map(s => parseFloat(s.trim()));
-                    amount = Math.floor(num / den);
-                } else {
-                    amount = Math.floor(evalMath(amountExpr));
-                }
-            } catch (e) { return []; }
-            if (amount <= 0) return [];
-            return [{ dir, amount }];
+                const ast = new RuleParser(codeStr).parse();
+                return function(stonesCount, validDirs) {
+                    try {
+                        return evaluateRuleAst(ast, stonesCount, validDirs);
+                    } catch (e) {
+                        return [];
+                    }
+                };
+            } catch (e) {
+                return null;
+            }
+        }
+
+        // ----- Rule validation helper -----
+        function validateRuleCode(codeStr) {
+            try {
+                new RuleParser(codeStr).parse();
+                return null;
+            } catch (e) {
+                return e.message || 'Invalid rule';
+            }
         }
 
         // ----- Update editor -----
@@ -851,13 +1104,11 @@ CELLS:
             exportData += `TIMESTAMP: ${timestamp}\n`;
             exportData += `SIZE: ${rows}x${cols}\n`;
             exportData += `CELLS:\n`;
-            
             for (let r = 0; r < rows; r++) {
                 for (let c = 0; c < cols; c++) {
                     exportData += `(${r},${c}) stones=${stones[r][c]} rule=${ruleCodeMap[r][c].replace(/\n/g, '\\n')}\n`;
                 }
             }
-            
             navigator.clipboard.writeText(exportData).then(() => {
                 showPopup('Board copied to system clipboard!');
             }).catch(() => {
@@ -890,7 +1141,6 @@ CELLS:
             let newRows = 0;
             let newCols = 0;
             let cellData = [];
-            
             for (let line of lines) {
                 line = line.trim();
                 if (line.startsWith('BOARD_TITLE:')) {
@@ -915,11 +1165,9 @@ CELLS:
                     }
                 }
             }
-            
             if (newRows >= 2 && newCols >= 2 && cellData.length === newRows * newCols) {
                 initBoard(newRows, newCols);
                 boardTitleInput.value = title;
-                
                 cellData.forEach(cell => {
                     if (cell.r < rows && cell.c < cols) {
                         stones[cell.r][cell.c] = cell.stones;
@@ -927,10 +1175,8 @@ CELLS:
                         cellRules[cell.r][cell.c] = compileRuleCode(cell.rule);
                     }
                 });
-                
                 drawBoard();
                 updateSelectedInfo();
-                
                 const date = new Date(timestamp);
                 showPopup(`Imported "${title}"\n${date.toLocaleDateString()} ${date.toLocaleTimeString()}`, 3000);
             } else {
@@ -948,10 +1194,15 @@ CELLS:
                 showPopup('Select a cell first');
                 return; 
             }
+            const error = validateRuleCode(code);
+            if (error) {
+                showPopup(`Rule error: ${error}`, 3000);
+                return;
+            }
             const compiled = compileRuleCode(code);
-            if (!compiled) { 
+            if (!compiled) {
                 showPopup('Rule could not be compiled');
-                return; 
+                return;
             }
             selected.forEach(key => {
                 const [r, c] = key.split(',').map(Number);

@@ -734,9 +734,14 @@ CELLS:
                     }
                     
                     if (conditionResult) {
+                        // Process inline action if present
                         if (inlineAction && inlineAction.startsWith('send ')) {
                             actions.push(...parseSendSafely(inlineAction, stonesCount, validDirs));
+                            return actions; // Return after inline action
+                        } else if (inlineAction === 'wait') {
+                            return actions; // Wait does nothing, return
                         }
+                        // Process block if no inline action
                         if (!inlineAction) {
                             let blockEnd = elseIdx !== -1 ? elseIdx : lines.length;
                             for (let k = i + 1; k < blockEnd; k++) {
@@ -745,12 +750,24 @@ CELLS:
                                     actions.push(...parseSendSafely(subLine, stonesCount, validDirs));
                                 }
                             }
+                            return actions;
                         }
-                        return actions;
                     } else {
                         if (elseIdx !== -1) {
                             const elseLine = lines[elseIdx].trim();
                             if (elseLine === 'else:') {
+                                // Check for inline else action
+                                const elseMatch = elseLine.match(/^else:\s*(.*)$/);
+                                const elseInlineAction = elseMatch && elseMatch[1] ? elseMatch[1].trim() : '';
+                                
+                                if (elseInlineAction && elseInlineAction.startsWith('send ')) {
+                                    actions.push(...parseSendSafely(elseInlineAction, stonesCount, validDirs));
+                                    return actions;
+                                } else if (elseInlineAction === 'wait') {
+                                    return actions;
+                                }
+                                
+                                // Process else block (multi-line)
                                 for (let k = elseIdx + 1; k < lines.length; k++) {
                                     const subLine = lines[k].trim();
                                     if (subLine.startsWith('send ')) {

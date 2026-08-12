@@ -1,0 +1,1308 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Rule-based cellular automata · polished UI</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            font-family: 'Segoe UI', Roboto, system-ui, sans-serif;
+        }
+        body {
+            background: #1a1e26;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            padding: 20px;
+        }
+        .game-container {
+            background: #232936;
+            border-radius: 28px;
+            padding: 24px 28px;
+            box-shadow: 0 18px 35px rgba(0,0,0,0.5);
+            display: flex;
+            gap: 20px;
+            max-width: 1400px;
+            width: 100%;
+            flex-wrap: wrap;
+        }
+        .left-panel {
+            flex: 1;
+            min-width: 700px;
+        }
+        .right-panel {
+            width: 350px;
+            background: #1e2430;
+            border-radius: 24px;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            box-shadow: inset 0 0 15px rgba(0,0,0,0.3);
+        }
+        h2 {
+            margin: 0 0 5px 0;
+            font-weight: 500;
+            letter-spacing: 0.5px;
+            color: #eef2f7;
+            font-size: 1.8rem;
+            text-align: center;
+        }
+        .title-bar {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+        .title-bar input {
+            flex: 1;
+            padding: 8px 12px;
+            border-radius: 30px;
+            border: 1px solid #3a4356;
+            background: #0f1219;
+            color: #eef2f7;
+            font-weight: 500;
+            font-size: 1.1rem;
+        }
+        .toolbar {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 18px;
+            align-items: center;
+            justify-content: center;
+            background: #1e2430;
+            padding: 12px 18px;
+            border-radius: 40px;
+            margin-bottom: 15px;
+        }
+        .size-control {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            color: #cdd9e9;
+        }
+        .size-control input {
+            width: 65px;
+            padding: 6px 8px;
+            border-radius: 30px;
+            border: 1px solid #3a4356;
+            background: #0f1219;
+            color: #eef2f7;
+            font-weight: 500;
+            text-align: center;
+        }
+        button {
+            background: #3a4a5f;
+            border: none;
+            color: #f0f4fa;
+            padding: 8px 16px;
+            border-radius: 30px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: 0.2s;
+            letter-spacing: 0.3px;
+            box-shadow: 0 3px 6px rgba(0,0,0,0.4);
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+        button:hover {
+            background: #4e6080;
+            transform: translateY(-1px);
+        }
+        .speed-slider {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            color: #cdd9e9;
+        }
+        .speed-slider input {
+            width: 130px;
+            cursor: pointer;
+            accent-color: #7a9ec9;
+        }
+        .play-controls {
+            display: flex;
+            gap: 6px;
+        }
+        .hint-container {
+            height: 30px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 10px;
+            position: relative;
+        }
+        .hint-text {
+            position: absolute;
+            font-size: 0.85rem;
+            color: #9faec6;
+            text-align: center;
+            opacity: 0;
+            transition: opacity 1s ease-in-out;
+        }
+        .hint-text.visible {
+            opacity: 1;
+        }
+        .board-wrapper {
+            display: flex;
+            justify-content: center;
+            overflow-x: auto;
+            padding: 10px 0;
+        }
+        canvas {
+            background: #12161e;
+            border-radius: 20px;
+            box-shadow: 0 10px 22px rgba(0,0,0,0.7);
+            display: block;
+            cursor: crosshair;
+            image-rendering: crisp-edges;
+        }
+        .help-button-container {
+            display: flex;
+            justify-content: center;
+            margin-top: 10px;
+        }
+        .editor-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            color: #b3c2d6;
+            font-weight: 500;
+            font-size: 1.1rem;
+        }
+        .editor-header span {
+            color: #ffbb66;
+        }
+        textarea {
+            width: 100%;
+            height: 280px;
+            background: #0f1219;
+            color: #e8edf5;
+            border: 1px solid #3a4356;
+            border-radius: 16px;
+            padding: 12px;
+            font-family: 'Cascadia Code', 'Fira Code', 'Consolas', monospace;
+            font-size: 0.9rem;
+            line-height: 1.5;
+            resize: vertical;
+            outline: none;
+        }
+        textarea:focus {
+            border-color: #7a9ec9;
+        }
+        .editor-actions {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+        .editor-actions button {
+            flex: 1;
+            justify-content: center;
+            font-size: 0.85rem;
+        }
+        .rule-status {
+            font-size: 0.85rem;
+            color: #9fb0c8;
+            padding: 4px 8px;
+            background: #171c26;
+            border-radius: 8px;
+            min-height: 24px;
+        }
+        .syntax-help {
+            font-size: 0.75rem;
+            color: #9fb0c8;
+            background: #171c26;
+            border-radius: 12px;
+            padding: 10px;
+            line-height: 1.4;
+        }
+        .syntax-help code {
+            color: #b8d0f0;
+        }
+        .popup {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: #2a3448;
+            color: #eef2f7;
+            padding: 20px 30px;
+            border-radius: 20px;
+            box-shadow: 0 15px 35px rgba(0,0,0,0.6);
+            z-index: 1000;
+            text-align: center;
+            font-weight: 500;
+            animation: fadeInOut 2.5s ease-in-out forwards;
+            pointer-events: none;
+        }
+        @keyframes fadeInOut {
+            0% { opacity: 0; transform: translate(-50%, -50%) scale(0.9); }
+            15% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+            85% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+            100% { opacity: 0; transform: translate(-50%, -50%) scale(0.9); }
+        }
+        .help-popup {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: #1e2430;
+            color: #eef2f7;
+            padding: 30px;
+            border-radius: 20px;
+            box-shadow: 0 15px 35px rgba(0,0,0,0.8);
+            z-index: 1000;
+            max-width: 600px;
+            max-height: 80vh;
+            overflow-y: auto;
+            display: none;
+        }
+        .help-popup.active {
+            display: block;
+        }
+        .help-popup h3 {
+            margin-top: 0;
+            color: #ffbb66;
+        }
+        .help-popup h4 {
+            margin-bottom: 8px;
+            color: #b8d0f0;
+        }
+        .help-popup p, .help-popup li {
+            font-size: 0.9rem;
+            line-height: 1.5;
+            margin: 6px 0;
+        }
+        .help-popup code {
+            background: #0a0d13;
+            padding: 2px 6px;
+            border-radius: 6px;
+            color: #b8d0f0;
+        }
+        .help-popup .close-help {
+            background: #e8a87c;
+            color: #1a1e26;
+            margin-top: 15px;
+        }
+        .help-popup pre {
+            background: #0a0d13;
+            padding: 10px;
+            border-radius: 8px;
+            font-size: 0.75rem;
+            overflow-x: auto;
+            color: #b8d0f0;
+        }
+    </style>
+</head>
+<body>
+<div class="game-container">
+    <div class="left-panel">
+        <div class="title-bar">
+            <input type="text" id="boardTitle" placeholder="Board title..." value="My Automata">
+            <button id="exportBtn">📤 Export</button>
+            <button id="importBtn">📥 Import</button>
+        </div>
+        <div class="toolbar">
+            <div class="size-control">
+                <label>Rows <strong>M</strong></label>
+                <input type="number" id="rowsInput" min="2" max="100" value="6">
+                <label>Cols <strong>N</strong></label>
+                <input type="number" id="colsInput" min="2" max="100" value="8">
+                <button id="resizeBoardBtn">🔄 Resize</button>
+            </div>
+            <div class="speed-slider">
+                <span>🐢</span>
+                <input type="range" id="speedSlider" min="0.5" max="10" step="0.5" value="2">
+                <span>🐇</span>
+                <span id="speedValue">2x</span>
+            </div>
+            <div class="play-controls">
+                <button id="playPauseBtn">▶️ Play</button>
+                <button id="stepBtn">⏭️ Step</button>
+                <button id="resetToSavedBtn">🔄 Reset to Saved</button>
+            </div>
+        </div>
+        <div class="hint-container" id="hintContainer">
+            <div class="hint-text visible" data-hint="0">🖱️ Drag or ctrl+click to select cells</div>
+            <div class="hint-text" data-hint="1">Shift+C copy · Shift+X cut · Shift+V paste</div>
+            <div class="hint-text" data-hint="2">⬆⬇ adjust stones · Backspace clear · Number keys set stones</div>
+            <div class="hint-text" data-hint="3">Press . in editor to apply rules</div>
+        </div>
+        <div class="board-wrapper">
+            <canvas id="boardCanvas" width="700" height="450"></canvas>
+        </div>
+        <div class="help-button-container">
+            <button id="helpBtn">❓ Need help?</button>
+        </div>
+    </div>
+
+    <div class="right-panel">
+        <div class="editor-header">
+            <span>📝 Rule Editor</span>
+            <span id="selectedCount">0 cells selected</span>
+        </div>
+        <div class="rule-status" id="ruleStatus">No cells selected</div>
+        <textarea id="ruleCode" spellcheck="false" placeholder="Write rule logic here... Press . to apply"></textarea>
+        <div class="editor-actions">
+            <button id="applyCodeBtn">✅ Apply (press . in editor)</button>
+            <button id="resetToDefaultBtn">🔄 Reset to default</button>
+        </div>
+        <div class="syntax-help">
+            <strong>Commands:</strong><br>
+            <code>send [amount] [direction]</code> - move stones<br>
+            <code>wait</code> - do nothing with stones<br>
+            <strong>Directions:</strong> up, down, left, right<br>
+            <strong>Single line:</strong> <code>if stones==2: send stones down</code><br>
+            <strong>Multi-line:</strong><br>
+            <code>if stones==2: send stones down</code><br>
+            <code>elif stones%3:</code><br>
+            <code> send 1 up</code><br>
+            <code> send 2 right</code><br>
+            <code>else: wait</code>
+        </div>
+    </div>
+</div>
+
+<div class="help-popup" id="helpPopup">
+    <h3>❓ Need Help?</h3>
+    <h4>What is this?</h4>
+    <p>This is a cellular automata game. Each cell on the grid can hold stones. Every cell has a rule that decides what to do with its stones. The rules run all at the same time, and stones move to new cells.</p>
+    
+    <h4>How to play</h4>
+    <p>Select cells by clicking or dragging. Then set up stones and rules. Press Play to watch them move.</p>
+    
+    <h4>Rules syntax</h4>
+    <p>You can write simple rules like <code>send 1 right</code> or <code>wait</code>. For conditions, use if/elif/else:</p>
+    <p><code>if stones == 1: send 1 up</code></p>
+    <p><code>if stones > 2: send stones down</code></p>
+    <p>You can use <code>and</code>, <code>or</code>, <code>not</code>, and comparisons like <code>2 &lt; stones &lt; 5</code>.</p>
+    <p>Multi-line rules work too. Just indent the next line after a colon.</p>
+    
+    <h4>Import / Export</h4>
+    <p>Export copies your board to the clipboard as text. Import reads that text and restores the board.</p>
+    <p>Example board (copy this and import it):</p>
+    <pre>BOARD_TITLE: Adder
+TIMESTAMP: 2026-08-12T16:43:03.886Z
+SIZE: 6x8
+CELLS:
+(0,0) stones=4 rule=send stones down
+(0,1) stones=0 rule=wait
+(0,2) stones=0 rule=wait
+(0,3) stones=0 rule=wait
+(0,4) stones=0 rule=wait
+(0,5) stones=0 rule=wait
+(0,6) stones=0 rule=wait
+(0,7) stones=9 rule=send stones down
+(1,0) stones=0 rule=send stones down
+(1,1) stones=0 rule=wait
+(1,2) stones=0 rule=wait
+(1,3) stones=0 rule=wait
+(1,4) stones=0 rule=wait
+(1,5) stones=0 rule=wait
+(1,6) stones=0 rule=wait
+(1,7) stones=0 rule=send stones down
+(2,0) stones=0 rule=send stones down
+(2,1) stones=0 rule=wait
+(2,2) stones=0 rule=wait
+(2,3) stones=0 rule=wait
+(2,4) stones=0 rule=wait
+(2,5) stones=0 rule=wait
+(2,6) stones=0 rule=wait
+(2,7) stones=0 rule=send stones down
+(3,0) stones=0 rule=send stones down
+(3,1) stones=0 rule=wait
+(3,2) stones=0 rule=wait
+(3,3) stones=0 rule=wait
+(3,4) stones=0 rule=wait
+(3,5) stones=0 rule=wait
+(3,6) stones=0 rule=wait
+(3,7) stones=0 rule=send stones down
+(4,0) stones=0 rule=send stones down
+(4,1) stones=0 rule=wait
+(4,2) stones=0 rule=wait
+(4,3) stones=0 rule=wait
+(4,4) stones=0 rule=wait
+(4,5) stones=0 rule=wait
+(4,6) stones=0 rule=wait
+(4,7) stones=0 rule=send stones down
+(5,0) stones=0 rule=send stones right
+(5,1) stones=0 rule=send stones right
+(5,2) stones=0 rule=send stones right
+(5,3) stones=0 rule=send stones right
+(5,4) stones=0 rule=send stones right
+(5,5) stones=0 rule=send stones right
+(5,6) stones=0 rule=send stones right
+(5,7) stones=0 rule=wait</pre>
+    
+    <p>This page was created by Carson B with DeepSeek coding assistance.</p>
+    <button class="close-help" onclick="document.getElementById('helpPopup').classList.remove('active')">Close</button>
+</div>
+
+<script>
+    (function() {
+        // ----- DOM refs -----
+        const canvas = document.getElementById('boardCanvas');
+        const ctx = canvas.getContext('2d');
+        const boardTitleInput = document.getElementById('boardTitle');
+        const exportBtn = document.getElementById('exportBtn');
+        const importBtn = document.getElementById('importBtn');
+        const rowsInput = document.getElementById('rowsInput');
+        const colsInput = document.getElementById('colsInput');
+        const resizeBtn = document.getElementById('resizeBoardBtn');
+        const speedSlider = document.getElementById('speedSlider');
+        const speedSpan = document.getElementById('speedValue');
+        const playPauseBtn = document.getElementById('playPauseBtn');
+        const stepBtn = document.getElementById('stepBtn');
+        const resetToSavedBtn = document.getElementById('resetToSavedBtn');
+        const ruleCodeTextarea = document.getElementById('ruleCode');
+        const applyCodeBtn = document.getElementById('applyCodeBtn');
+        const resetToDefaultBtn = document.getElementById('resetToDefaultBtn');
+        const selectedCountSpan = document.getElementById('selectedCount');
+        const ruleStatusDiv = document.getElementById('ruleStatus');
+        const helpBtn = document.getElementById('helpBtn');
+        const hintContainer = document.getElementById('hintContainer');
+
+        // ----- State -----
+        let rows = 6;
+        let cols = 8;
+        let stones = [];
+        let ruleCodeMap = [];
+        let cellRules = [];
+        let savedStones = null;
+        let clipboardData = null;
+        let cellSize = 50;
+
+        // Selection
+        let selected = new Set();
+        let isSelecting = false;
+        let selectionStart = null;
+        let selectionEnd = null;
+
+        // Animation
+        let playing = false;
+        let animationTimer = null;
+        let speedMultiplier = 2;
+
+        // Hints rotation
+        let currentHintIndex = 0;
+        const hintElements = document.querySelectorAll('.hint-text');
+        let hintRotationTimer = null;
+
+        const DEFAULT_RULE_CODE = 'wait';
+
+        // ----- Popup helper -----
+        function showPopup(message, duration = 2500) {
+            const popup = document.createElement('div');
+            popup.className = 'popup';
+            popup.textContent = message;
+            document.body.appendChild(popup);
+            setTimeout(() => {
+                if (popup.parentNode) popup.parentNode.removeChild(popup);
+            }, duration);
+        }
+
+        // ----- Hint rotation -----
+        function rotateHints() {
+            hintElements.forEach(el => el.classList.remove('visible'));
+            hintElements[currentHintIndex].classList.add('visible');
+            currentHintIndex = (currentHintIndex + 1) % hintElements.length;
+        }
+
+        function startHintRotation() {
+            rotateHints();
+            hintRotationTimer = setInterval(rotateHints, 4000);
+        }
+
+        // ----- Initialize board -----
+        function initBoard(newRows, newCols, preserveData = false) {
+            const oldStones = preserveData ? stones.map(row => [...row]) : null;
+            const oldRules = preserveData ? ruleCodeMap.map(row => [...row]) : null;
+            
+            rows = newRows;
+            cols = newCols;
+            calculateCellSize();
+            stones = Array.from({ length: rows }, () => Array(cols).fill(0));
+            ruleCodeMap = Array.from({ length: rows }, () => Array(cols).fill(DEFAULT_RULE_CODE));
+            cellRules = Array.from({ length: rows }, () => Array(cols).fill(null));
+            
+            if (preserveData && oldStones && oldRules) {
+                for (let r = 0; r < Math.min(rows, oldStones.length); r++) {
+                    for (let c = 0; c < Math.min(cols, oldStones[0].length); c++) {
+                        stones[r][c] = oldStones[r][c];
+                        ruleCodeMap[r][c] = oldRules[r][c];
+                        cellRules[r][c] = compileRuleCode(oldRules[r][c]);
+                    }
+                }
+            }
+            
+            savedStones = null;
+            clipboardData = null;
+            selected.clear();
+            isSelecting = false;
+            selectionStart = selectionEnd = null;
+            resizeCanvas();
+            drawBoard();
+            updateSelectedInfo();
+        }
+
+        function calculateCellSize() {
+            const maxCells = Math.max(rows, cols);
+            if (maxCells <= 10) cellSize = 60;
+            else if (maxCells <= 20) cellSize = 45;
+            else if (maxCells <= 30) cellSize = 35;
+            else if (maxCells <= 40) cellSize = 28;
+            else if (maxCells <= 50) cellSize = 22;
+            else if (maxCells <= 60) cellSize = 18;
+            else if (maxCells <= 70) cellSize = 15;
+            else if (maxCells <= 80) cellSize = 13;
+            else if (maxCells <= 90) cellSize = 11;
+            else cellSize = 10;
+        }
+
+        function resizeCanvas() {
+            const padding = 10;
+            canvas.width = cols * cellSize + padding * 2;
+            canvas.height = rows * cellSize + padding * 2;
+        }
+
+        function saveStoneState() {
+            savedStones = stones.map(row => [...row]);
+        }
+
+        // ----- Get bounding box of selection -----
+        function getSelectionBounds() {
+            if (selected.size === 0) return null;
+            let minR = Infinity, maxR = -Infinity, minC = Infinity, maxC = -Infinity;
+            selected.forEach(key => {
+                const [r, c] = key.split(',').map(Number);
+                minR = Math.min(minR, r);
+                maxR = Math.max(maxR, r);
+                minC = Math.min(minC, c);
+                maxC = Math.max(maxC, c);
+            });
+            return { minR, maxR, minC, maxC };
+        }
+
+        // ----- Copy/Cut/Paste functions -----
+        function copySelection(cut = false) {
+            const bounds = getSelectionBounds();
+            if (!bounds) return;
+            
+            clipboardData = [];
+            for (let r = bounds.minR; r <= bounds.maxR; r++) {
+                const rowData = [];
+                for (let c = bounds.minC; c <= bounds.maxC; c++) {
+                    rowData.push({
+                        stones: stones[r][c],
+                        rule: ruleCodeMap[r][c]
+                    });
+                }
+                clipboardData.push(rowData);
+            }
+            
+            if (cut) {
+                for (let r = bounds.minR; r <= bounds.maxR; r++) {
+                    for (let c = bounds.minC; c <= bounds.maxC; c++) {
+                        stones[r][c] = 0;
+                        ruleCodeMap[r][c] = DEFAULT_RULE_CODE;
+                        cellRules[r][c] = null;
+                    }
+                }
+                drawBoard();
+                updateSelectedInfo();
+            }
+            
+            showPopup(cut ? 'Cut to clipboard' : 'Copied to clipboard');
+        }
+
+        function pasteSelection() {
+            if (!clipboardData) {
+                showPopup('Clipboard is empty');
+                return;
+            }
+            if (selected.size !== 1) {
+                showPopup('Select a single target cell to paste');
+                return;
+            }
+            
+            const targetKey = Array.from(selected)[0];
+            const [targetR, targetC] = targetKey.split(',').map(Number);
+            
+            for (let dr = 0; dr < clipboardData.length; dr++) {
+                for (let dc = 0; dc < clipboardData[0].length; dc++) {
+                    const newR = targetR + dr;
+                    const newC = targetC + dc;
+                    
+                    if (newR >= rows || newC >= cols) continue;
+                    
+                    const data = clipboardData[dr][dc];
+                    stones[newR][newC] = data.stones;
+                    ruleCodeMap[newR][newC] = data.rule;
+                    cellRules[newR][newC] = compileRuleCode(data.rule);
+                }
+            }
+            
+            drawBoard();
+            updateSelectedInfo();
+            showPopup('Pasted from clipboard');
+        }
+
+        // ----- Enhanced expression evaluator -----
+        function evaluateExpression(expr, stonesCount) {
+            expr = expr.trim();
+            if (expr.startsWith('not ')) return !evaluateExpression(expr.substring(4), stonesCount);
+            const andMatch = expr.match(/^(.*?)\s+and\s+(.*)$/);
+            if (andMatch) return evaluateExpression(andMatch[1], stonesCount) && evaluateExpression(andMatch[2], stonesCount);
+            const orMatch = expr.match(/^(.*?)\s+or\s+(.*)$/);
+            if (orMatch) return evaluateExpression(orMatch[1], stonesCount) || evaluateExpression(orMatch[2], stonesCount);
+            
+            expr = expr.replace(/stones/g, stonesCount);
+            const comparisonMatch = expr.match(/^(.+?)\s*(<=|>=|<|>|==|!=)\s*(.+?)\s*(<=|>=|<|>|==|!=)\s*(.+)$/);
+            if (comparisonMatch) {
+                const left = evalMath(comparisonMatch[1]);
+                const op1 = comparisonMatch[2];
+                const middle = evalMath(comparisonMatch[3]);
+                const op2 = comparisonMatch[4];
+                const right = evalMath(comparisonMatch[5]);
+                return compareValues(left, op1, middle) && compareValues(middle, op2, right);
+            }
+            const singleMatch = expr.match(/^(.+?)\s*(<=|>=|<|>|==|!=)\s*(.+)$/);
+            if (singleMatch) {
+                return compareValues(evalMath(singleMatch[1]), singleMatch[2], evalMath(singleMatch[3]));
+            }
+            const moduloMatch = expr.match(/^(\d+)\s*%\s*(\d+)\s*(==|!=)\s*(\d+)$/);
+            if (moduloMatch) {
+                const result = parseInt(moduloMatch[1]) % parseInt(moduloMatch[2]);
+                return moduloMatch[3] === '==' ? result === parseInt(moduloMatch[4]) : result !== parseInt(moduloMatch[4]);
+            }
+            return false;
+        }
+        
+        function evalMath(str) {
+            str = str.trim();
+            if (str.includes('/')) {
+                const [num, den] = str.split('/').map(s => parseFloat(s.trim()));
+                return Math.floor(num / den);
+            }
+            if (str.includes('*')) {
+                const [num1, num2] = str.split('*').map(s => parseFloat(s.trim()));
+                return num1 * num2;
+            }
+            if (str.includes('+')) {
+                const [num1, num2] = str.split('+').map(s => parseFloat(s.trim()));
+                return num1 + num2;
+            }
+            if (str.includes('-')) {
+                const [num1, num2] = str.split('-').map(s => parseFloat(s.trim()));
+                return num1 - num2;
+            }
+            return parseFloat(str) || 0;
+        }
+        
+        function compareValues(left, op, right) {
+            switch(op) {
+                case '<': return left < right;
+                case '<=': return left <= right;
+                case '>': return left > right;
+                case '>=': return left >= right;
+                case '==': return left === right;
+                case '!=': return left !== right;
+                default: return false;
+            }
+        }
+
+        // ----- Rule compiler with single-line support -----
+        function compileRuleCode(codeStr) {
+            if (!codeStr || codeStr.trim() === '') return null;
+            return function(stonesCount, validDirs) {
+                const lines = codeStr.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+                return executeRuleLines(lines, 0, stonesCount, validDirs);
+            };
+        }
+
+        function executeRuleLines(lines, startIdx, stonesCount, validDirs) {
+            let i = startIdx;
+            const actions = [];
+            while (i < lines.length) {
+                const line = lines[i];
+                if (line.startsWith('if ') || line.startsWith('elif ')) {
+                    const conditionMatch = line.match(/^(?:if|elif)\s+(.+?)\s*:\s*(.*)$/);
+                    if (!conditionMatch) { i++; continue; }
+                    const condition = conditionMatch[1].trim();
+                    const inlineAction = conditionMatch[2] ? conditionMatch[2].trim() : '';
+                    const conditionResult = evaluateExpression(condition, stonesCount);
+                    
+                    let elseIdx = -1;
+                    let j = i + 1;
+                    while (j < lines.length) {
+                        const trimmed = lines[j].trim();
+                        if (trimmed === 'else:' || trimmed.startsWith('elif ')) { elseIdx = j; break; }
+                        j++;
+                    }
+                    
+                    if (conditionResult) {
+                        if (inlineAction && inlineAction.startsWith('send ')) {
+                            actions.push(...parseSendSafely(inlineAction, stonesCount, validDirs));
+                        } else if (inlineAction === 'wait') {
+                            // Do nothing
+                        }
+                        if (!inlineAction) {
+                            let blockEnd = elseIdx !== -1 ? elseIdx : lines.length;
+                            for (let k = i + 1; k < blockEnd; k++) {
+                                const subLine = lines[k].trim();
+                                if (subLine.startsWith('send ')) {
+                                    actions.push(...parseSendSafely(subLine, stonesCount, validDirs));
+                                }
+                            }
+                        }
+                        return actions;
+                    } else {
+                        if (elseIdx !== -1) {
+                            const elseLine = lines[elseIdx].trim();
+                            if (elseLine === 'else:') {
+                                for (let k = elseIdx + 1; k < lines.length; k++) {
+                                    const subLine = lines[k].trim();
+                                    if (subLine.startsWith('send ')) {
+                                        actions.push(...parseSendSafely(subLine, stonesCount, validDirs));
+                                    }
+                                }
+                                return actions;
+                            } else if (elseLine.startsWith('elif ')) {
+                                return executeRuleLines(lines.slice(elseIdx), 0, stonesCount, validDirs);
+                            }
+                        }
+                        return actions;
+                    }
+                } else if (line.startsWith('send ')) {
+                    actions.push(...parseSendSafely(line, stonesCount, validDirs));
+                }
+                i++;
+            }
+            return actions;
+        }
+
+        function parseSendSafely(sendLine, stonesCount, validDirs) {
+            const match = sendLine.match(/^send\s+(.+)$/);
+            if (!match) return [];
+            let amountExpr = match[1].trim();
+            let amount = 0;
+            let dir = '';
+            const parts = amountExpr.split(/\s+/);
+            if (parts.length >= 2) {
+                dir = parts[parts.length-1].toLowerCase();
+                amountExpr = parts.slice(0, -1).join(' ');
+            }
+            try {
+                amountExpr = amountExpr.replace(/stones/g, stonesCount);
+                if (amountExpr.includes('/')) {
+                    const [num, den] = amountExpr.split('/').map(s => parseFloat(s.trim()));
+                    amount = Math.floor(num / den);
+                } else {
+                    amount = Math.floor(evalMath(amountExpr));
+                }
+            } catch (e) { return []; }
+            if (amount <= 0) return [];
+            return [{ dir, amount }];
+        }
+
+        // ----- Update editor -----
+        function updateSelectedInfo() {
+            const count = selected.size;
+            selectedCountSpan.textContent = `${count} cells selected`;
+            if (count === 0) {
+                ruleCodeTextarea.value = '';
+                ruleStatusDiv.textContent = 'No cells selected';
+                ruleStatusDiv.style.color = '#9fb0c8';
+                return;
+            }
+            let allSame = true;
+            let firstCode = null;
+            selected.forEach(key => {
+                const [r, c] = key.split(',').map(Number);
+                const code = ruleCodeMap[r][c];
+                if (firstCode === null) firstCode = code;
+                else if (code !== firstCode) allSame = false;
+            });
+            if (allSame && firstCode !== null) {
+                ruleCodeTextarea.value = firstCode;
+                ruleStatusDiv.textContent = firstCode === DEFAULT_RULE_CODE ? 
+                    `${count} cells · default rule (wait)` : `${count} cells · same custom rule`;
+                ruleStatusDiv.style.color = firstCode === DEFAULT_RULE_CODE ? '#9fb0c8' : '#7ec87e';
+            } else {
+                ruleCodeTextarea.value = '';
+                ruleStatusDiv.textContent = `${count} cells · different rules (mixed)`;
+                ruleStatusDiv.style.color = '#e8a87c';
+            }
+        }
+
+        // ----- Export/Import -----
+        function exportBoard() {
+            const title = boardTitleInput.value || 'Untitled';
+            const timestamp = new Date().toISOString();
+            let exportData = `BOARD_TITLE: ${title}\n`;
+            exportData += `TIMESTAMP: ${timestamp}\n`;
+            exportData += `SIZE: ${rows}x${cols}\n`;
+            exportData += `CELLS:\n`;
+            
+            for (let r = 0; r < rows; r++) {
+                for (let c = 0; c < cols; c++) {
+                    const stoneCount = stones[r][c];
+                    const rule = ruleCodeMap[r][c];
+                    exportData += `(${r},${c}) stones=${stoneCount} rule=${rule.replace(/\n/g, '\\n')}\n`;
+                }
+            }
+            
+            navigator.clipboard.writeText(exportData).then(() => {
+                showPopup('Board copied to clipboard!');
+            }).catch(() => {
+                const textarea = document.createElement('textarea');
+                textarea.value = exportData;
+                document.body.appendChild(textarea);
+                textarea.select();
+                document.execCommand('copy');
+                document.body.removeChild(textarea);
+                showPopup('Board copied to clipboard!');
+            });
+        }
+
+        function importBoard() {
+            navigator.clipboard.readText().then(text => {
+                try {
+                    parseImportedBoard(text);
+                } catch (e) {
+                    showPopup('Invalid board data format');
+                }
+            }).catch(() => {
+                showPopup('Cannot read clipboard. Paste data manually.');
+            });
+        }
+
+        function parseImportedBoard(text) {
+            const lines = text.split('\n');
+            let title = '';
+            let timestamp = '';
+            let newRows = 0;
+            let newCols = 0;
+            let cellData = [];
+            
+            for (let line of lines) {
+                line = line.trim();
+                if (line.startsWith('BOARD_TITLE:')) {
+                    title = line.substring('BOARD_TITLE:'.length).trim();
+                } else if (line.startsWith('TIMESTAMP:')) {
+                    timestamp = line.substring('TIMESTAMP:'.length).trim();
+                } else if (line.startsWith('SIZE:')) {
+                    const sizeMatch = line.substring('SIZE:'.length).trim().match(/(\d+)x(\d+)/);
+                    if (sizeMatch) {
+                        newRows = parseInt(sizeMatch[1]);
+                        newCols = parseInt(sizeMatch[2]);
+                    }
+                } else if (line.startsWith('(')) {
+                    const cellMatch = line.match(/\((\d+),(\d+)\)\s+stones=(\d+)\s+rule=(.*)/);
+                    if (cellMatch) {
+                        cellData.push({
+                            r: parseInt(cellMatch[1]),
+                            c: parseInt(cellMatch[2]),
+                            stones: parseInt(cellMatch[3]),
+                            rule: cellMatch[4].replace(/\\n/g, '\n')
+                        });
+                    }
+                }
+            }
+            
+            if (newRows >= 2 && newCols >= 2 && cellData.length === newRows * newCols) {
+                initBoard(newRows, newCols);
+                boardTitleInput.value = title;
+                
+                cellData.forEach(cell => {
+                    if (cell.r < rows && cell.c < cols) {
+                        stones[cell.r][cell.c] = cell.stones;
+                        ruleCodeMap[cell.r][cell.c] = cell.rule;
+                        cellRules[cell.r][cell.c] = compileRuleCode(cell.rule);
+                    }
+                });
+                
+                drawBoard();
+                updateSelectedInfo();
+                
+                const date = new Date(timestamp);
+                const dateStr = date.toLocaleDateString();
+                const timeStr = date.toLocaleTimeString();
+                showPopup(`Imported board "${title}"\nCreated: ${dateStr} ${timeStr}`, 4000);
+            } else {
+                showPopup('Invalid board dimensions or incomplete data');
+            }
+        }
+
+        exportBtn.addEventListener('click', exportBoard);
+        importBtn.addEventListener('click', importBoard);
+
+        // ----- Apply rule -----
+        function applyRuleFromEditor() {
+            const code = ruleCodeTextarea.value;
+            if (selected.size === 0) { 
+                showPopup('Select at least one cell first');
+                return; 
+            }
+            const compiled = compileRuleCode(code);
+            if (!compiled) { 
+                showPopup('Rule code could not be compiled');
+                return; 
+            }
+            selected.forEach(key => {
+                const [r, c] = key.split(',').map(Number);
+                ruleCodeMap[r][c] = code;
+                cellRules[r][c] = compiled;
+            });
+            drawBoard();
+            updateSelectedInfo();
+            showPopup('Rule applied to selected cells');
+        }
+
+        applyCodeBtn.addEventListener('click', applyRuleFromEditor);
+
+        // Period key in textarea to apply rule
+        ruleCodeTextarea.addEventListener('keydown', (e) => {
+            if (e.key === '.') {
+                e.preventDefault();
+                applyRuleFromEditor();
+            }
+        });
+
+        resetToDefaultBtn.addEventListener('click', () => {
+            if (selected.size === 0) return;
+            selected.forEach(key => {
+                const [r, c] = key.split(',').map(Number);
+                ruleCodeMap[r][c] = DEFAULT_RULE_CODE;
+                cellRules[r][c] = null;
+            });
+            ruleCodeTextarea.value = DEFAULT_RULE_CODE;
+            drawBoard();
+            updateSelectedInfo();
+        });
+
+        // ----- Step logic -----
+        function stepAutomata() {
+            const nextStones = Array.from({ length: rows }, () => Array(cols).fill(0));
+            for (let r = 0; r < rows; r++) {
+                for (let c = 0; c < cols; c++) {
+                    const count = stones[r][c];
+                    if (count === 0) continue;
+                    const validDirs = getValidDirections(r, c);
+                    const customRule = cellRules[r][c];
+                    let actions = customRule ? (customRule(count, validDirs) || []) : [];
+                    
+                    let remainingStones = count;
+                    for (const action of actions) {
+                        const isDirValid = 
+                            (action.dir === 'right' && validDirs.right) ||
+                            (action.dir === 'left' && validDirs.left) ||
+                            (action.dir === 'up' && validDirs.up) ||
+                            (action.dir === 'down' && validDirs.down);
+                        if (!isDirValid) continue;
+                        const amountToSend = Math.min(action.amount, remainingStones);
+                        if (amountToSend <= 0) continue;
+                        if (action.dir === 'right') nextStones[r][c+1] += amountToSend;
+                        else if (action.dir === 'left') nextStones[r][c-1] += amountToSend;
+                        else if (action.dir === 'up') nextStones[r-1][c] += amountToSend;
+                        else if (action.dir === 'down') nextStones[r+1][c] += amountToSend;
+                        remainingStones -= amountToSend;
+                    }
+                    if (remainingStones > 0) nextStones[r][c] += remainingStones;
+                }
+            }
+            stones = nextStones;
+            drawBoard();
+        }
+
+        function getValidDirections(r, c) {
+            return {
+                up: r > 0,
+                down: r < rows - 1,
+                left: c > 0,
+                right: c < cols - 1
+            };
+        }
+
+        // ----- Drawing -----
+        function drawBoard() {
+            const padding = 10;
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            for (let r = 0; r < rows; r++) {
+                for (let c = 0; c < cols; c++) {
+                    const x = padding + c * cellSize;
+                    const y = padding + r * cellSize;
+                    const key = `${r},${c}`;
+                    let bgColor = selected.has(key) ? '#7a9ec9' : 
+                                  (ruleCodeMap[r][c] !== DEFAULT_RULE_CODE ? '#2a3a55' : '#202a38');
+                    ctx.fillStyle = bgColor;
+                    ctx.fillRect(x, y, cellSize-2, cellSize-2);
+                    
+                    const stoneCount = stones[r][c];
+                    ctx.fillStyle = '#e8edf5';
+                    const fontSize = Math.max(10, Math.floor(cellSize * 0.35));
+                    ctx.font = `bold ${fontSize}px "Segoe UI", sans-serif`;
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'middle';
+                    if (stoneCount > 0 && stoneCount <= 6) {
+                        drawPips(ctx, x + cellSize/2 - 1, y + cellSize/2 - 1, stoneCount, cellSize);
+                    } else if (stoneCount > 6) {
+                        ctx.fillText(stoneCount, x + cellSize/2, y + cellSize/2);
+                    }
+                }
+            }
+            if (isSelecting && selectionStart && selectionEnd) {
+                ctx.strokeStyle = '#ffbb66';
+                ctx.lineWidth = 2;
+                ctx.setLineDash([4, 4]);
+                const x1 = Math.min(selectionStart.c, selectionEnd.c) * cellSize + padding;
+                const y1 = Math.min(selectionStart.r, selectionEnd.r) * cellSize + padding;
+                const x2 = Math.max(selectionStart.c, selectionEnd.c) * cellSize + padding + cellSize-2;
+                const y2 = Math.max(selectionStart.r, selectionEnd.r) * cellSize + padding + cellSize-2;
+                ctx.strokeRect(x1, y1, x2-x1, y2-y1);
+                ctx.setLineDash([]);
+            }
+        }
+
+        function drawPips(context, cx, cy, count, cellSize) {
+            context.fillStyle = '#f0e6d2';
+            const positions = {
+                1: [[0,0]],
+                2: [[-1,-1],[1,1]],
+                3: [[-1,-1],[0,0],[1,1]],
+                4: [[-1,-1],[1,-1],[-1,1],[1,1]],
+                5: [[-1,-1],[1,-1],[0,0],[-1,1],[1,1]],
+                6: [[-1,-1],[1,-1],[-1,0],[1,0],[-1,1],[1,1]]
+            };
+            const pipRadius = Math.max(2, cellSize * 0.08);
+            const offset = cellSize * 0.22;
+            positions[count].forEach(([dx, dy]) => {
+                context.beginPath();
+                context.arc(cx + dx*offset, cy + dy*offset, pipRadius, 0, 2*Math.PI);
+                context.fill();
+            });
+        }
+
+        // ----- Selection events -----
+        function cellFromEvent(e) {
+            const rect = canvas.getBoundingClientRect();
+            const scaleX = canvas.width / rect.width;
+            const scaleY = canvas.height / rect.height;
+            const mouseX = (e.clientX - rect.left) * scaleX;
+            const mouseY = (e.clientY - rect.top) * scaleY;
+            const padding = 10;
+            const col = Math.floor((mouseX - padding) / cellSize);
+            const row = Math.floor((mouseY - padding) / cellSize);
+            if (row >=0 && row < rows && col >=0 && col < cols) return { r: row, c: col };
+            return null;
+        }
+
+        canvas.addEventListener('mousedown', (e) => {
+            const cell = cellFromEvent(e);
+            if (!cell) return;
+            const ctrl = e.ctrlKey || e.metaKey;
+            if (ctrl) {
+                const key = `${cell.r},${cell.c}`;
+                if (selected.has(key)) selected.delete(key);
+                else selected.add(key);
+                isSelecting = false;
+                selectionStart = selectionEnd = null;
+                drawBoard();
+                updateSelectedInfo();
+            } else {
+                isSelecting = true;
+                selectionStart = cell;
+                selectionEnd = cell;
+                selected.clear();
+                selected.add(`${cell.r},${cell.c}`);
+                drawBoard();
+                updateSelectedInfo();
+            }
+        });
+
+        canvas.addEventListener('mousemove', (e) => {
+            if (!isSelecting) return;
+            const cell = cellFromEvent(e);
+            if (cell) {
+                selectionEnd = cell;
+                selected.clear();
+                const r1 = Math.min(selectionStart.r, cell.r);
+                const r2 = Math.max(selectionStart.r, cell.r);
+                const c1 = Math.min(selectionStart.c, cell.c);
+                const c2 = Math.max(selectionStart.c, cell.c);
+                for (let r = r1; r <= r2; r++) for (let c = c1; c <= c2; c++) selected.add(`${r},${c}`);
+                drawBoard();
+                updateSelectedInfo();
+            }
+        });
+
+        window.addEventListener('mouseup', () => {
+            if (isSelecting) {
+                isSelecting = false;
+                selectionStart = selectionEnd = null;
+                drawBoard();
+            }
+        });
+
+        // ----- Keyboard handling -----
+        window.addEventListener('keydown', (e) => {
+            if (e.target === ruleCodeTextarea || e.target === rowsInput || e.target === colsInput || e.target === boardTitleInput) {
+                return;
+            }
+            
+            if (e.shiftKey && (e.key === 'ArrowUp' || e.key === 'ArrowDown' || e.key === 'ArrowLeft' || e.key === 'ArrowRight')) {
+                e.preventDefault();
+                if (selected.size !== 1) return;
+                
+                const key = Array.from(selected)[0];
+                const [r, c] = key.split(',').map(Number);
+                let newR = r, newC = c;
+                
+                if (e.key === 'ArrowUp' && r > 0) newR = r - 1;
+                else if (e.key === 'ArrowDown' && r < rows - 1) newR = r + 1;
+                else if (e.key === 'ArrowLeft' && c > 0) newC = c - 1;
+                else if (e.key === 'ArrowRight' && c < cols - 1) newC = c + 1;
+                
+                if (newR !== r || newC !== c) {
+                    selected.clear();
+                    selected.add(`${newR},${newC}`);
+                    drawBoard();
+                    updateSelectedInfo();
+                }
+                return;
+            }
+            
+            if (e.shiftKey && (e.key === 'c' || e.key === 'C')) {
+                e.preventDefault();
+                copySelection(false);
+                return;
+            }
+            
+            if (e.shiftKey && (e.key === 'x' || e.key === 'X')) {
+                e.preventDefault();
+                copySelection(true);
+                return;
+            }
+            
+            if (e.shiftKey && (e.key === 'v' || e.key === 'V')) {
+                e.preventDefault();
+                pasteSelection();
+                return;
+            }
+            
+            if (!e.shiftKey && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
+                e.preventDefault();
+                if (selected.size === 0) return;
+                const delta = e.key === 'ArrowUp' ? 1 : -1;
+                selected.forEach(key => {
+                    const [r, c] = key.split(',').map(Number);
+                    stones[r][c] = Math.max(0, stones[r][c] + delta);
+                });
+                drawBoard();
+                return;
+            }
+            
+            if (e.key === 'Backspace' || e.key === 'Delete') {
+                e.preventDefault();
+                if (selected.size === 0) return;
+                selected.forEach(key => {
+                    const [r, c] = key.split(',').map(Number);
+                    stones[r][c] = 0;
+                });
+                drawBoard();
+                return;
+            }
+            
+            if (e.key >= '0' && e.key <= '9') {
+                e.preventDefault();
+                if (selected.size === 0) return;
+                const value = parseInt(e.key);
+                selected.forEach(key => {
+                    const [r, c] = key.split(',').map(Number);
+                    stones[r][c] = value;
+                });
+                drawBoard();
+            }
+        });
+
+        // ----- Playback controls -----
+        resizeBtn.addEventListener('click', () => {
+            const nr = parseInt(rowsInput.value, 10);
+            const nc = parseInt(colsInput.value, 10);
+            if (nr >=2 && nr <=100 && nc >=2 && nc <=100) {
+                initBoard(nr, nc, true);
+            } else {
+                alert('Rows/cols between 2 and 100');
+            }
+        });
+
+        speedSlider.addEventListener('input', () => {
+            speedMultiplier = parseFloat(speedSlider.value);
+            speedSpan.textContent = speedMultiplier + 'x';
+            if (playing) restartAnimation();
+        });
+
+        function restartAnimation() {
+            if (animationTimer) clearInterval(animationTimer);
+            if (playing) {
+                const intervalMs = Math.max(50, 1000 / (speedMultiplier * 1.5));
+                animationTimer = setInterval(() => stepAutomata(), intervalMs);
+            }
+        }
+
+        playPauseBtn.addEventListener('click', () => {
+            if (playing) {
+                pauseGame();
+            } else {
+                saveStoneState();
+                startPlaying();
+            }
+        });
+
+        function startPlaying() {
+            playing = true;
+            playPauseBtn.textContent = '⏸️ Pause';
+            restartAnimation();
+        }
+
+        function pauseGame() {
+            playing = false;
+            playPauseBtn.textContent = '▶️ Play';
+            if (animationTimer) { clearInterval(animationTimer); animationTimer = null; }
+        }
+
+        stepBtn.addEventListener('click', () => { pauseGame(); stepAutomata(); });
+        
+        resetToSavedBtn.addEventListener('click', () => {
+            pauseGame();
+            if (savedStones) {
+                stones = savedStones.map(row => [...row]);
+                drawBoard();
+            } else {
+                showPopup('No saved state yet. Press Play to save.');
+            }
+        });
+
+        // Help button
+        helpBtn.addEventListener('click', () => {
+            document.getElementById('helpPopup').classList.add('active');
+        });
+
+        // Initial setup
+        initBoard(rows, cols);
+        stones[2][3] = 1;
+        stones[2][4] = 2;
+        stones[3][2] = 3;
+        stones[4][5] = 5;
+        stones[1][1] = 8;
+        drawBoard();
+        updateSelectedInfo();
+        startHintRotation();
+    })();
+</script>
+</body>
+</html>

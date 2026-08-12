@@ -169,6 +169,11 @@
             justify-content: center;
             margin-top: 8px;
         }
+        .help-button {
+            background: #3a4a5f;
+            color: #ff4444;
+            font-weight: bold;
+        }
         .editor-header {
             display: flex;
             justify-content: space-between;
@@ -214,17 +219,6 @@
             background: #171c26;
             border-radius: 6px;
             min-height: 20px;
-        }
-        .syntax-help {
-            font-size: 0.7rem;
-            color: #9fb0c8;
-            background: #171c26;
-            border-radius: 10px;
-            padding: 8px;
-            line-height: 1.3;
-        }
-        .syntax-help code {
-            color: #b8d0f0;
         }
         .popup {
             position: fixed;
@@ -339,7 +333,7 @@
             <canvas id="boardCanvas" width="700" height="450"></canvas>
         </div>
         <div class="help-button-container">
-            <button id="helpBtn">❓ Need help?</button>
+            <button id="helpBtn" class="help-button">Need help?</button>
         </div>
     </div>
 
@@ -354,16 +348,11 @@
             <button id="applyCodeBtn">✅ Apply (.)</button>
             <button id="resetToDefaultBtn">🔄 Default</button>
         </div>
-        <div class="syntax-help">
-            <code>send [n] [dir]</code> · <code>wait</code><br>
-            <code>if stones==2: send stones down</code><br>
-            <code>if stones>2: send 1 up</code>
-        </div>
     </div>
 </div>
 
 <div class="help-popup" id="helpPopup">
-    <h3>❓ Need Help?</h3>
+    <h3>Need help?</h3>
     <h4>What is this?</h4>
     <p>A grid where each cell holds stones. Every cell has a rule that moves its stones. Rules run at the same time.</p>
     <h4>How to play</h4>
@@ -461,7 +450,7 @@ CELLS:
         let ruleCodeMap = [];
         let cellRules = [];
         let savedStones = null;
-        let internalClipboard = null; // Separate from system clipboard
+        let internalClipboard = null;
         let cellSize = 50;
 
         // Selection
@@ -527,7 +516,6 @@ CELLS:
                 }
             }
             
-            // Preserve internal clipboard across resize
             savedStones = null;
             selected.clear();
             isSelecting = false;
@@ -576,7 +564,7 @@ CELLS:
             return { minR, maxR, minC, maxC };
         }
 
-        // ----- Internal clipboard functions (separate from system clipboard) -----
+        // ----- Internal clipboard functions -----
         function copySelection(cut = false) {
             const bounds = getSelectionBounds();
             if (!bounds) return;
@@ -704,7 +692,7 @@ CELLS:
             }
         }
 
-        // ----- Rule compiler -----
+        // ----- Rule compiler (fixed for single-line) -----
         function compileRuleCode(codeStr) {
             if (!codeStr || codeStr.trim() === '') return null;
             return function(stonesCount, validDirs) {
@@ -737,11 +725,11 @@ CELLS:
                         // Process inline action if present
                         if (inlineAction && inlineAction.startsWith('send ')) {
                             actions.push(...parseSendSafely(inlineAction, stonesCount, validDirs));
-                            return actions; // Return after inline action
+                            return actions;
                         } else if (inlineAction === 'wait') {
-                            return actions; // Wait does nothing, return
+                            return actions;
                         }
-                        // Process block if no inline action
+                        // Process multi-line block
                         if (!inlineAction) {
                             let blockEnd = elseIdx !== -1 ? elseIdx : lines.length;
                             for (let k = i + 1; k < blockEnd; k++) {
@@ -756,18 +744,7 @@ CELLS:
                         if (elseIdx !== -1) {
                             const elseLine = lines[elseIdx].trim();
                             if (elseLine === 'else:') {
-                                // Check for inline else action
-                                const elseMatch = elseLine.match(/^else:\s*(.*)$/);
-                                const elseInlineAction = elseMatch && elseMatch[1] ? elseMatch[1].trim() : '';
-                                
-                                if (elseInlineAction && elseInlineAction.startsWith('send ')) {
-                                    actions.push(...parseSendSafely(elseInlineAction, stonesCount, validDirs));
-                                    return actions;
-                                } else if (elseInlineAction === 'wait') {
-                                    return actions;
-                                }
-                                
-                                // Process else block (multi-line)
+                                // Process else block
                                 for (let k = elseIdx + 1; k < lines.length; k++) {
                                     const subLine = lines[k].trim();
                                     if (subLine.startsWith('send ')) {

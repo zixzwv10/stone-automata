@@ -95,6 +95,20 @@
             font-weight: 500;
             text-align: center;
         }
+        .checkbox-control {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            color: #cdd9e9;
+            font-size: 0.9rem;
+            cursor: pointer;
+        }
+        .checkbox-control input[type="checkbox"] {
+            width: 16px;
+            height: 16px;
+            cursor: pointer;
+            accent-color: #7a9ec9;
+        }
         button {
             background: #3a4a5f;
             border: none;
@@ -293,6 +307,68 @@
             overflow-x: auto;
             color: #b8d0f0;
         }
+        /* Random dialog */
+        .random-dialog {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: #232936;
+            border-radius: 18px;
+            box-shadow: 0 18px 40px rgba(0,0,0,0.8);
+            padding: 24px 30px;
+            z-index: 2000;
+            display: none;
+            border: 1px solid #3a4a5f;
+            min-width: 220px;
+        }
+        .random-dialog.active {
+            display: block;
+        }
+        .random-dialog h3 {
+            color: #eef2f7;
+            margin: 0 0 12px 0;
+            text-align: center;
+            font-weight: 400;
+        }
+        .random-dialog label {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            color: #cdd9e9;
+            font-size: 0.9rem;
+            gap: 12px;
+            margin-bottom: 8px;
+        }
+        .random-dialog input {
+            width: 60px;
+            padding: 4px 8px;
+            border-radius: 20px;
+            border: 1px solid #3a4356;
+            background: #0f1219;
+            color: #eef2f7;
+            font-weight: 500;
+            text-align: center;
+        }
+        .random-dialog input:focus {
+            border-color: #7a9ec9;
+            outline: none;
+        }
+        .random-dialog .dialog-actions {
+            display: flex;
+            gap: 10px;
+            margin-top: 14px;
+        }
+        .random-dialog .dialog-actions button {
+            flex: 1;
+            justify-content: center;
+        }
+        .random-dialog .cancel-btn {
+            background: #4a3a3a;
+        }
+        .random-dialog .cancel-btn:hover {
+            background: #6a4a4a;
+        }
     </style>
 </head>
 <body>
@@ -311,6 +387,10 @@
                 <input type="number" id="colsInput" min="2" max="100" value="8" />
                 <button id="resizeBoardBtn">🔄 Resize</button>
             </div>
+            <div class="checkbox-control">
+                <input type="checkbox" id="stopLoopsCheckbox" checked />
+                <label for="stopLoopsCheckbox">⏹️ stop loops</label>
+            </div>
             <div class="speed-slider">
                 <span>🐢</span>
                 <input type="range" id="speedSlider" min="0.5" max="10" step="0.5" value="2" />
@@ -328,6 +408,8 @@
             <div class="hint-text" data-hint="1">Shift+C copy · Shift+X cut · Shift+V paste</div>
             <div class="hint-text" data-hint="2">⬆⬇ adjust stones · Backspace clear · Number keys set stones</div>
             <div class="hint-text" data-hint="3">Press . in editor to apply rules</div>
+            <div class="hint-text" data-hint="4">Shift+R = random stones (min/max)</div>
+            <div class="hint-text" data-hint="5">Shift+A = select all cells</div>
         </div>
         <div class="board-wrapper">
             <canvas id="boardCanvas" width="700" height="450"></canvas>
@@ -348,6 +430,17 @@
             <button id="applyCodeBtn">✅ Apply (.)</button>
             <button id="resetToDefaultBtn">🔄 Default</button>
         </div>
+    </div>
+</div>
+
+<!-- Random dialog (Shift+R) -->
+<div class="random-dialog" id="randomDialog">
+    <h3>🎲 Random Stones</h3>
+    <label>Min <input type="number" id="randMin" value="0" min="0" /></label>
+    <label>Max <input type="number" id="randMax" value="5" min="0" /></label>
+    <div class="dialog-actions">
+        <button id="applyRandomBtn">Apply</button>
+        <button class="cancel-btn" id="cancelRandomBtn">Cancel</button>
     </div>
 </div>
 
@@ -446,6 +539,12 @@ CELLS:
         const selectedCountSpan = document.getElementById('selectedCount');
         const ruleStatusDiv = document.getElementById('ruleStatus');
         const helpBtn = document.getElementById('helpBtn');
+        const randomDialog = document.getElementById('randomDialog');
+        const randMinInput = document.getElementById('randMin');
+        const randMaxInput = document.getElementById('randMax');
+        const applyRandomBtn = document.getElementById('applyRandomBtn');
+        const cancelRandomBtn = document.getElementById('cancelRandomBtn');
+        const stopLoopsCheckbox = document.getElementById('stopLoopsCheckbox');
 
         // ----- State -----
         let rows = 6;
@@ -467,6 +566,10 @@ CELLS:
         let playing = false;
         let animationTimer = null;
         let speedMultiplier = 2;
+
+        // History for loop detection (stores board states as strings)
+        let boardHistory = [];
+        const MAX_HISTORY = 5;
 
         // Hints
         let currentHintIndex = 0;
@@ -498,6 +601,38 @@ CELLS:
             hintRotationTimer = setInterval(rotateHints, 4000);
         }
 
+        // ----- Board state fingerprint -----
+        function getBoardFingerprint() {
+            return stones.map(row => row.join(',')).join('|');
+        }
+
+        function updateBoardHistory() {
+            const fp = getBoardFingerprint();
+            boardHistory.push(fp);
+            if (boardHistory.length > MAX_HISTORY) {
+                boardHistory.shift();
+            }
+        }
+
+        function checkStaticState(previousFingerprint) {
+            const current = getBoardFingerprint();
+            return current === previousFingerprint;
+        }
+
+        function checkLoopDetected() {
+            if (!stopLoopsCheckbox.checked) {
+                return false; // Loop detection is disabled
+            }
+            const current = getBoardFingerprint();
+            // Check if current state appears in history (excluding the most recent entry, which is itself)
+            for (let i = 0; i < boardHistory.length - 1; i++) {
+                if (boardHistory[i] === current) {
+                    return true;
+                }
+            }
+            return false;
+        }
+
         // ----- Initialize board -----
         function initBoard(newRows, newCols, preserveData = false) {
             const oldStones = preserveData ? stones.map(row => [...row]) : null;
@@ -524,6 +659,7 @@ CELLS:
             selected.clear();
             isSelecting = false;
             selectionStart = selectionEnd = null;
+            boardHistory = [];
             resizeCanvas();
             drawBoard();
             updateSelectedInfo();
@@ -632,10 +768,7 @@ CELLS:
             showPopup('Pasted from internal clipboard');
         }
 
-        // ----- Rule language parser (updated for semicolon-separated actions) -----
-        // Design: actions inside if/elif/else can be multiple, separated by ';'.
-        // Top-level statements can also be separated by ';' or newlines.
-
+        // ----- Rule language parser -----
         function tokenizeRule(text) {
             const tokens = [];
             let i = 0;
@@ -735,7 +868,6 @@ CELLS:
                 const statements = [];
                 while (this.current().type !== 'eof') {
                     statements.push(this.parseStatement());
-                    // Allow semicolon between statements (optional)
                     if (this.current().type === 'semicolon') this.advance();
                 }
                 return statements;
@@ -787,7 +919,6 @@ CELLS:
                 };
             }
 
-            // Parse a list of actions separated by semicolons.
             parseActionList() {
                 const actions = [];
                 do {
@@ -799,7 +930,7 @@ CELLS:
                     } else {
                         throw new Error(`Expected send or wait after ":"`);
                     }
-                } while (this.current().type === 'semicolon' && this.advance()); // consume semicolon
+                } while (this.current().type === 'semicolon' && this.advance());
                 return actions;
             }
 
@@ -874,7 +1005,6 @@ CELLS:
                         right
                     };
                 }
-                // Bare expression is truthy/nonzero.
                 return {
                     type: 'truthy',
                     value: left
@@ -989,7 +1119,6 @@ CELLS:
             }
         }
 
-        // Evaluate a list of statements (AST) and return an array of {dir, amount}.
         function evaluateRuleAst(statements, stonesCount, validDirs) {
             const actions = [];
 
@@ -1016,7 +1145,6 @@ CELLS:
                     continue;
                 }
                 if (statement.type === 'wait') {
-                    // do nothing
                     continue;
                 }
                 if (statement.type === 'if') {
@@ -1031,7 +1159,6 @@ CELLS:
                     if (!branchTaken && statement.elseActions) {
                         addActionList(statement.elseActions);
                     }
-                    // Continue to next statement – do NOT return early.
                 }
             }
             return actions;
@@ -1053,7 +1180,6 @@ CELLS:
             }
         }
 
-        // ----- Rule validation helper -----
         function validateRuleCode(codeStr) {
             try {
                 new RuleParser(codeStr).parse();
@@ -1096,7 +1222,7 @@ CELLS:
             }
         }
 
-        // ----- Export/Import (system clipboard) -----
+        // ----- Export/Import -----
         function exportBoard() {
             const title = boardTitleInput.value || 'Untitled';
             const timestamp = new Date().toISOString();
@@ -1235,8 +1361,10 @@ CELLS:
             updateSelectedInfo();
         });
 
-        // ----- Step logic -----
+        // ----- Step logic with detection -----
         function stepAutomata() {
+            const previousFingerprint = getBoardFingerprint();
+            
             const nextStones = Array.from({ length: rows }, () => Array(cols).fill(0));
             for (let r = 0; r < rows; r++) {
                 for (let c = 0; c < cols; c++) {
@@ -1267,6 +1395,22 @@ CELLS:
             }
             stones = nextStones;
             drawBoard();
+            
+            // Check for static state
+            const newFingerprint = getBoardFingerprint();
+            if (newFingerprint === previousFingerprint) {
+                pauseGame();
+                showPopup('Static state reached.', 2500);
+                return;
+            }
+            
+            // Update history and check for loops (only if enabled)
+            updateBoardHistory();
+            if (checkLoopDetected()) {
+                pauseGame();
+                showPopup('Simple loop reached.', 2500);
+                return;
+            }
         }
 
         function getValidDirections(r, c) {
@@ -1344,12 +1488,14 @@ CELLS:
             if (e.target.closest('button')) return;
             if (e.target.closest('.help-popup')) return;
             if (e.target.closest('.right-panel')) return;
+            if (e.target.closest('.random-dialog')) return;
             
             if (selected.size > 0) {
                 selected.clear();
                 drawBoard();
                 updateSelectedInfo();
             }
+            randomDialog.classList.remove('active');
         });
 
         // ----- Selection events -----
@@ -1367,6 +1513,10 @@ CELLS:
         }
 
         canvas.addEventListener('mousedown', (e) => {
+            if (e.button === 2) {
+                e.preventDefault();
+                return;
+            }
             const cell = cellFromEvent(e);
             if (!cell) return;
             const ctrl = e.ctrlKey || e.metaKey;
@@ -1387,6 +1537,7 @@ CELLS:
                 drawBoard();
                 updateSelectedInfo();
             }
+            randomDialog.classList.remove('active');
         });
 
         canvas.addEventListener('mousemove', (e) => {
@@ -1413,9 +1564,83 @@ CELLS:
             }
         });
 
+        // ----- Select all (Shift+A) -----
+        function selectAll() {
+            selected.clear();
+            for (let r = 0; r < rows; r++) {
+                for (let c = 0; c < cols; c++) {
+                    selected.add(`${r},${c}`);
+                }
+            }
+            drawBoard();
+            updateSelectedInfo();
+            showPopup(`Selected all ${rows * cols} cells`);
+        }
+
+        // ----- Random dialog (Shift+R) -----
+        function showRandomDialog() {
+            if (selected.size === 0) {
+                showPopup('Select at least one cell first');
+                return;
+            }
+            randomDialog.classList.add('active');
+            setTimeout(() => {
+                randMinInput.focus();
+                randMinInput.select();
+            }, 10);
+        }
+
+        function applyRandomStones() {
+            const minVal = parseInt(randMinInput.value, 10) || 0;
+            const maxVal = parseInt(randMaxInput.value, 10) || 0;
+            if (minVal > maxVal) {
+                showPopup('Min cannot be greater than Max');
+                return;
+            }
+            if (selected.size === 0) {
+                showPopup('Select at least one cell');
+                return;
+            }
+            const range = maxVal - minVal + 1;
+            selected.forEach(key => {
+                const [r, c] = key.split(',').map(Number);
+                stones[r][c] = Math.floor(Math.random() * range) + minVal;
+            });
+            drawBoard();
+            randomDialog.classList.remove('active');
+            showPopup(`Random stones (${minVal}–${maxVal}) applied to ${selected.size} cells`);
+        }
+
+        applyRandomBtn.addEventListener('click', applyRandomStones);
+        cancelRandomBtn.addEventListener('click', () => {
+            randomDialog.classList.remove('active');
+        });
+
+        // Close dialog on Escape
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && randomDialog.classList.contains('active')) {
+                randomDialog.classList.remove('active');
+            }
+        });
+
         // ----- Keyboard handling -----
         window.addEventListener('keydown', (e) => {
-            if (e.target === ruleCodeTextarea || e.target === rowsInput || e.target === colsInput || e.target === boardTitleInput) {
+            // If any input/textarea is focused, don't interfere
+            if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') {
+                return;
+            }
+            
+            // Shift+A for select all
+            if (e.shiftKey && (e.key === 'a' || e.key === 'A')) {
+                e.preventDefault();
+                selectAll();
+                return;
+            }
+            
+            // Shift+R for random stones
+            if (e.shiftKey && (e.key === 'r' || e.key === 'R')) {
+                e.preventDefault();
+                showRandomDialog();
                 return;
             }
             
@@ -1518,6 +1743,8 @@ CELLS:
             if (playing) {
                 pauseGame();
             } else {
+                // Reset history when starting play
+                boardHistory = [];
                 saveStoneState();
                 startPlaying();
             }
@@ -1535,12 +1762,18 @@ CELLS:
             if (animationTimer) { clearInterval(animationTimer); animationTimer = null; }
         }
 
-        stepBtn.addEventListener('click', () => { pauseGame(); stepAutomata(); });
+        stepBtn.addEventListener('click', () => { 
+            pauseGame(); 
+            // For manual step, also reset history to avoid false positives from previous runs
+            boardHistory = [];
+            stepAutomata(); 
+        });
         
         resetToSavedBtn.addEventListener('click', () => {
             pauseGame();
             if (savedStones) {
                 stones = savedStones.map(row => [...row]);
+                boardHistory = [];
                 drawBoard();
             } else {
                 showPopup('No saved state. Press Play first.');
